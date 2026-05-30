@@ -14,6 +14,8 @@ static const char *builtins[] = {
   "exit",
   "echo",
   "type",
+  "pwd",
+  "cd",
 };
 static const size_t builtin_count = sizeof(builtins) / sizeof(builtins[0]);
 
@@ -125,6 +127,24 @@ void builtin_type(int argc, char *argv[]) {
   printf("%s: not found\n", cmd);
 }
 
+// CD --
+// builtin_cd
+void builtin_cd(int argc, char *argv[]) {
+  if (argc < 2) { return; }
+
+  const char *path = argv[1];
+
+  if (strcmp(argv[1], "~") == 0) {
+    const char *home_env = getenv("HOME");
+    if (home_env == NULL) { return; }
+    path = home_env;
+  }
+
+  if (chdir(path) != 0) {
+    printf("cd: %s: No such file or directory\n", argv[1]);
+  }
+}
+
 
 
 // EXECUTES ===================================
@@ -138,6 +158,11 @@ void execute_builtin(int argc, char *argv[]) {
   } else if (strcmp(argv[0], "type") == 0) {
     builtin_type(argc, argv);
     return;
+  } else if (strcmp(argv[0], "pwd") == 0) {
+    printf("%s\n", getcwd(NULL, 0));
+    return;
+  } else if (strcmp(argv[0], "cd") == 0) {
+    builtin_cd(argc, argv);
   }
 }
 
