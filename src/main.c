@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #define MAX_INPUT_SIZE 1024
 #define MAX_ARGS 128
@@ -74,20 +75,72 @@ char *find_executable_in_path(const char *cmd) {
 }
 
 
-// Tokenize: Turns IN line to ARC/ARGV Form
+// Tokenize: Turns input line into argc/argv form
+// UNDERSTAND: *w is just rewriting input, which is then just argv[] but we have indices of 0...argc-1 that indicate the start of each token (all NULL-terminated)
+// - Handles single quotes (preserves spaces, strips quote chars) and concatenation
 int build_argv(char *input, char *argv[]) {
-  int argc = 0; // arg we count
+  int argc = 0; // count args
+  char *p = input;
 
-  char *token = strtok(input, " "); // first token
-  while (token != NULL && argc < MAX_ARGS-1) {
-    argv[argc] = token;
-    argc++;
-    token = strtok(NULL, " ");
+  while (*p != '\0' && argc < MAX_ARGS-1) {
+    while (*p == ' ') { p++; } // skip inter-token whitespace
+    if (*p == '\0') break;
+
+    // Write token in-place (read ptr p, write ptr w)
+    char *token_start = p;
+    char *w = p; // w: token we're manually writing to
+    bool in_s_quote = false;
+    bool in_d_quote = false;
+    bool in_backslash = false;
+
+    while (*p != '\0') {
+      // Double Quote Token
+      if (in_d_quote) {
+        if (in_backslash) { // backslash escapes these within d-quotes: ", \, $, `, and \n
+          // escapables
+          if (*p == '"' || *p == '\\' || *p == '$' || *p == '`' || *p == '\n') { *w++ = *p++; }
+          // non-escapables (just write the backslash and the following char)
+          else { *w++ = '\\'; *w++ = *p++; }
+          in_backslash = false;
+        } 
+        else if (*p == '\\')  { in_backslash = true; p++; } 
+        else if (*p == '"')   { in_d_quote = false; p++; } 
+        else                  { *w++ = *p++; }
+      
+        // Single Quote Token
+      } else if (in_s_quote) {
+        if (*p == '\'') {  in_s_quote = false;  p++; } 
+        else {  *w++ = *p++; }
+      
+        // Backslash: next char is always literal
+      } else if (in_backslash && !in_s_quote) {
+        *w++ = *p++;
+        in_backslash = false;
+      
+        // Space-deliminated Token
+      } else {
+        if (*p == '\"') { in_d_quote = true; p++; } 
+        else if (*p == '\'') { in_s_quote = true; p++; } 
+        else if (*p == '\\') { in_backslash = true; p++; } 
+        else if (*p == ' ') { break; }
+        else { *w++ = *p++; }
+      }
+    }
+
+    // ATP: *p is either a space delim or \0
+    bool was_space = (*p == ' '); // was p the end of a whitespace-token
+    *w = '\0'; // null-terminate the token
+    if (was_space) { p++; } // skip the space delimiter (to get to start of next token)
+
+    argv[argc++] = token_start; // store and then increment argc
   }
 
   argv[argc] = NULL;
   return argc;
 }
+
+
+
 
 
 
@@ -97,7 +150,7 @@ int build_argv(char *input, char *argv[]) {
 void builtin_echo(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     if (i > 1) { printf(" "); }
-    printf("%s", argv[i]);
+    printf("%s", argv[i]); // RECALL: argv[i] is just from i to NULL (\0)
   }
 
   printf("\n");
