@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
-SRC = src/main.c src/utils.c
+SRC = src/main.c src/utils.c src/completion.c  -lreadline
 BIN = build/shell
 
 .PHONY: build clean run

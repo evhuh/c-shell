@@ -1,7 +1,10 @@
 #include "utils.h"
+#include "completion.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 
 
@@ -34,20 +37,24 @@ int main(int argc, char *argv[]) {
   // Flush after every printf
   setbuf(stdout, NULL);
 
+  init_completion();
+
   while (1) { // 4. LOOP
-    // 1. READ
-    printf("$ ");
+    // 1. READ (readline handles/intercepts TAB, arrow keys, etc.)
+    char *input = readline("$ ");
+    if (input == NULL) { break; } // EOF (Ctrl-D)
+    if (input[0] == '\0') { free(input); continue; } // skip blank lines
 
-    // 2. EXTRACT
-    char input[MAX_INPUT_SIZE];
-    if (fgets(input, sizeof(input), stdin) == NULL) { break; } // fgets(buffer, max_size, input_source);
-    input[strcspn(input, "\n")] = '\0'; // Remove trailing \n:   strcspn(input, "\n") finds index of where "\n" sits
+    add_history(input); // [Completion] makes up-arrow recall work
 
-    // Tokenize
-    char *argv[MAX_ARGS];
-    int argc = build_argv(input, argv);
+    // EXTRACT — Tokenize
+    char *local_argv[MAX_ARGS];
+    int local_argc = build_argv(input, local_argv);
 
-    execute_command(argc, argv);
+    // 2. EXECUTE + 3. PRINT
+    execute_command(local_argc, local_argv);
+
+    free(input); // readline malloc's the line — we must free it
   }
 
   return 0;
