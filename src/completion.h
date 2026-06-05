@@ -3,9 +3,9 @@
 #ifndef COMPLETION_H
 #define COMPLETION_H
 
+#include <stdio.h>
 #include <readline/readline.h>
 
-char **shell_completer(const char *text, int start, int end);
 void init_completion(void);
 
 #endif
