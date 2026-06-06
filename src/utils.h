@@ -1,3 +1,6 @@
+// Navigation, Quoting, Redirection
+// Completion
+
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -8,6 +11,7 @@
 
 
 bool is_builtin(const char *cmd);
+const char *find_completion(const char *cmd);
 char *find_executable_in_path(const char *cmd);
 int build_argv(char *input, char *argv[]);
 void builtin_echo(int argc, char *argv[]);
