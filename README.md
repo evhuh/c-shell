@@ -7,30 +7,13 @@
 The project was built as a deep-dive into systems programming: process lifecycle, file descriptor manipulation, signal propagation, and the mechanics that underpin every terminal session.
 
 ## Features
+### Custom Commands
 
-### Built-in Commands
-
-| Command | Description |
-|---|---|
-| `cd [dir\|~]` | Change directory; `~` expands to `$HOME` |
-| `echo [args...]` | Print arguments to stdout |
-| `exit` | Exit the shell (saves history first) |
-| `type <cmd>` | Report whether a command is a builtin or show its PATH location |
-| `pwd` | Print the current working directory |
-| `jobs` | List active and recently completed background jobs |
-| `history [n]` | Print the last `n` history entries (or all if omitted) |
-| `history -r <file>` | Read entries from a file into history |
-| `history -a <file>` | Append new entries since the last `-a` to a file |
-| `history -w <file>` | Write all history entries to a file |
-| `declare NAME=VALUE` | Set a shell variable |
-| `declare -p NAME` | Inspect a shell variable's current value |
-| `complete -C <script> <cmd>` | Register a completer script for a command |
-| `complete -r <cmd>` | Remove a registered completer |
-| `complete -p <cmd>` | Inspect a registered completer |
+> [!WARNING]
+> Use with caution.
 
 #### `boss` / `unboss`
-
-The panic button...for when you're not supposed to be gaming
+...for when you're not supposed to be gaming
 
 `boss` instantly:
 - Suspends all running game processes (they freeze mid-frame, no progress lost)
@@ -64,6 +47,28 @@ Run `pgrep -fi "YourGame"` first to confirm the pattern matches before adding it
 Uses two Unix signals: `SIGSTOP` to freeze a process and `SIGCONT` to resume it.
 They're the same signals your shell's `fg`/`bg` builtins send when managing jobs.
 Game PIDs are saved at boss-time so unboss resumes exactly what was paused.
+
+
+### Standard Built-in Commands
+
+| Command | Description |
+|---|---|
+| `cd [dir\|~]` | Change directory; `~` expands to `$HOME` |
+| `echo [args...]` | Print arguments to stdout |
+| `exit` | Exit the shell (saves history first) |
+| `type <cmd>` | Report whether a command is a builtin or show its PATH location |
+| `pwd` | Print the current working directory |
+| `jobs` | List active and recently completed background jobs |
+| `history [n]` | Print the last `n` history entries (or all if omitted) |
+| `history -r <file>` | Read entries from a file into history |
+| `history -a <file>` | Append new entries since the last `-a` to a file |
+| `history -w <file>` | Write all history entries to a file |
+| `declare NAME=VALUE` | Set a shell variable |
+| `declare -p NAME` | Inspect a shell variable's current value |
+| `complete -C <script> <cmd>` | Register a completer script for a command |
+| `complete -r <cmd>` | Remove a registered completer |
+| `complete -p <cmd>` | Inspect a registered completer |
+
 
 ### External Command Execution
 
