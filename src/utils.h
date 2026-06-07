@@ -10,17 +10,20 @@
 #define MAX_INPUT_SIZE 1024
 #define MAX_ARGS 128
 
+// AUX HISTORY ===================================
+#define MAX_HISTORY 100
+extern char *history[MAX_HISTORY];
+extern int history_size;
 
+// AUX BACKGROUND JOBS ===================================
 #define MAX_JOBS 64
 typedef struct { int job_num; pid_t pid; char *cmd; char *status; } Job;
 extern Job job_table[MAX_JOBS];
 extern int job_count;
-
-
 void reap_background_jobs(void);
 
+
 bool is_builtin(const char *cmd);
-const char *find_completion(const char *cmd);
 char *find_executable_in_path(const char *cmd);
 int build_argv(char *input, char *argv[]);
 void builtin_echo(int argc, char *argv[]);

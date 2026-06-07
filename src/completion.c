@@ -35,6 +35,52 @@ user types "git <TAB>"
 #include <sys/stat.h>
 #include <readline/readline.h>
 
+
+// COMPLETION REGISTRY ===================================
+// Completion registry: arr of {cmd, script} structs
+#define MAX_COMPLETIONS 256
+typedef struct { char *cmd; char *script; } CompletionEntry;
+static CompletionEntry completion_registry[MAX_COMPLETIONS];
+static int completion_count = 0;
+
+// Read: Walk registry, return script for cmd or NULL
+const char *find_completion(const char *cmd) {
+  for (int i = 0; i < completion_count; i++) {
+    if (strcmp(completion_registry[i].cmd, cmd) == 0) { return completion_registry[i].script; }
+  }
+  return NULL;
+}
+
+// Write: Insert or update a completer script for cmd
+static void register_completion(const char *cmd, const char *script) {
+  for (int i = 0; i < completion_count; i++) {
+    if (strcmp(completion_registry[i].cmd, cmd) == 0) {
+      free(completion_registry[i].script);
+      completion_registry[i].script = strdup(script);
+      return;
+    }
+  }
+  if (completion_count < MAX_COMPLETIONS) {
+    completion_registry[completion_count].cmd = strdup(cmd);
+    completion_registry[completion_count].script = strdup(script);
+    completion_count++;
+  }
+}
+
+// Delete: Remove a registered completer for cmd (no-op if not found)
+static void remove_completion(const char *cmd) {
+  for (int i = 0; i < completion_count; i++) {
+    if (strcmp(completion_registry[i].cmd, cmd) == 0) {
+      free(completion_registry[i].cmd);
+      free(completion_registry[i].script);
+      // fill gap by shifting tail left
+      completion_registry[i] = completion_registry[--completion_count];
+      return;
+    }
+  }
+}
+
+
 static const char *builtins[] = {
   "echo",
   "exit",
@@ -43,6 +89,7 @@ static const char *builtins[] = {
   "cd",
   "complete",
   "jobs",
+  "history",
   NULL
 };
 
@@ -274,6 +321,29 @@ static void display_matches(char **m, int num, int max_len) {
   rl_on_new_line();
   rl_redisplay();
 }
+
+// Builtin handler for the "complete" command
+// complete -C <script> <cmd> : registers a completer script for a cmd (store it)
+// complete -p <cmd>          : if a spec exists, print complete -C '<script>' <cmd>
+// complete -r <cmd>          : remove a registered completer
+void builtin_complete(int argc, char *argv[]) {
+  // (1) Register a completer
+  if (argc >= 4 && strcmp(argv[1], "-C") == 0) {
+    register_completion(argv[3], argv[2]);
+  // (2) Remove a registered completer
+  } else if (argc >= 3 && strcmp(argv[1], "-r") == 0) {
+    remove_completion(argv[2]);
+  // (3) Inspect a registered completer
+  } else if (argc >= 3 && strcmp(argv[1], "-p") == 0) {
+    const char *script = find_completion(argv[2]);
+    if (script) {
+      printf("complete -C '%s' %s\n", script, argv[2]);
+    } else {
+      fprintf(stderr, "complete: %s: no completion specification\n", argv[2]);
+    }
+  }
+}
+
 
 // 3. Setup: runs once at startup
 void init_completion(void) {

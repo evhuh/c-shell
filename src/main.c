@@ -1,6 +1,7 @@
 #include "utils.h"
 #include "completion.h"
 #include "pipeline.h"
+#include "history.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +39,27 @@ int main(int argc, char *argv[]) {
   // Flush after every printf
   setbuf(stdout, NULL);
 
+  // [Completion]
   init_completion();
+
+  // [History] Load history from HISTFILE on startup
+  const char *histfile = getenv("HISTFILE");
+  if (histfile) {
+    FILE *f = fopen(histfile, "r");
+    if (f) {
+      char line[MAX_INPUT_SIZE];
+      while (fgets(line, sizeof(line), f)) {
+        size_t len = strlen(line);
+        if (len > 0 && line[len-1] == '\n') { line[--len] = '\0'; }
+        if (len == 0) { continue; }
+        if (history_size < MAX_HISTORY) {
+          history[history_size++] = strdup(line);
+          add_history(line);
+        }
+      }
+      fclose(f);
+    }
+  }
 
   while (1) { // 4. LOOP
     // Reap any completed background jobs before printing prompt
@@ -50,6 +71,11 @@ int main(int argc, char *argv[]) {
     if (input[0] == '\0') { free(input); continue; } // skip blank lines
 
     add_history(input); // [Completion] makes up-arrow recall work
+
+    // [History]
+    if (history_size < MAX_HISTORY) {
+      history[history_size++] = strdup(input);
+    }
 
     // EXTRACT — Tokenize
     char *local_argv[MAX_ARGS];
@@ -76,6 +102,11 @@ int main(int argc, char *argv[]) {
 
     free(input); // readline malloc's the line — we must free it
   }
+
+  // [History] Write History on Exit
+  if (histfile) { save_history_to_file(histfile); }
+  // [History] free locally
+  for (int i = 0; i < history_size; i++) { free(history[i]); }
 
   return 0;
 }

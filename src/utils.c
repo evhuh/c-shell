@@ -1,4 +1,7 @@
 #include "utils.h"
+#include "completion.h"
+#include "jobs.h"
+#include "history.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,9 +18,14 @@ static const char *builtins[] = {
   "cd",
   "complete",
   "jobs",
+  "history",
 };
 static const size_t builtin_count = sizeof(builtins) / sizeof(builtins[0]);
 
+
+// AUX HISTORY ===================================
+char *history[MAX_HISTORY];
+int history_size = 0;
 
 // AUX BACKGROUND JOBS ===================================
 Job job_table[MAX_JOBS];
@@ -68,53 +76,6 @@ static int next_available_job_num(void) {
     if (!taken) { return candidate; }
   }
 }
-
-
-// AUX PROG COMPELTION ===================================
-// Completion registry: arr of {cmd, script} structs
-#define MAX_COMPLETIONS 256
-typedef struct { char *cmd; char *script; } CompletionEntry;
-static CompletionEntry completion_registry[MAX_COMPLETIONS];
-static int completion_count = 0;
-
-// Read: Walk registry, return script for cmd or NULL
-const char *find_completion(const char *cmd) {
-  for (int i = 0; i < completion_count; i++) {
-    if (strcmp(completion_registry[i].cmd, cmd) == 0) { return completion_registry[i].script; }
-  }
-  return NULL;
-}
-
-// Write: Insert or update a completer script for cmd
-static void register_completion(const char *cmd, const char *script) {
-  for (int i = 0; i < completion_count; i++) {
-    if (strcmp(completion_registry[i].cmd, cmd) == 0) {
-      free(completion_registry[i].script);
-      completion_registry[i].script = strdup(script);
-      return;
-    }
-  }
-  if (completion_count < MAX_COMPLETIONS) {
-    completion_registry[completion_count].cmd = strdup(cmd);
-    completion_registry[completion_count].script = strdup(script);
-    completion_count++;
-  }
-}
-
-
-// Delete: Remove a registered completer for cmd (no-op if not found)
-static void remove_completion(const char *cmd) {
-  for (int i = 0; i < completion_count; i++) {
-    if (strcmp(completion_registry[i].cmd, cmd) == 0) {
-      free(completion_registry[i].cmd);
-      free(completion_registry[i].script);
-      // fill gap by shifting tail left
-      completion_registry[i] = completion_registry[--completion_count];
-      return;
-    }
-  }
-}
-
 
 
 // AUX UNIVERSAL ===================================
@@ -299,6 +260,8 @@ void builtin_cd(int argc, char *argv[]) {
 // Execute a builtin Cmd
 void execute_builtin(int argc, char *argv[]) {
   if (strcmp(argv[0], "exit") == 0) {
+    const char *histfile = getenv("HISTFILE");
+    if (histfile) { save_history_to_file(histfile); }
     exit(0);
   } else if (strcmp(argv[0], "echo") == 0) {
     builtin_echo(argc, argv);
@@ -312,58 +275,12 @@ void execute_builtin(int argc, char *argv[]) {
   } else if (strcmp(argv[0], "cd") == 0) {
     builtin_cd(argc, argv);
   } else if (strcmp(argv[0], "complete") == 0) {
-    // NOTES:
-    // complete -C <script> <cmd> : registers a completer script for a cmd (store it)
-    // complete -p <cmd> : if a spec exists, print complete -C '<scipt>' <cmd>
-
-    // (1) Register a completer
-    if (argc >= 3 && strcmp(argv[1], "-C") == 0 && argc >= 4) {
-      register_completion(argv[3], argv[2]);
-    // (2) Remove a registered completer
-    } else if (argc >= 3 && strcmp(argv[1], "-r") == 0) {
-      remove_completion(argv[2]);
-    // (3) Inspect a registered completer
-    } else if (argc >= 3 && strcmp(argv[1], "-p") == 0) {
-      const char *script = find_completion(argv[2]);
-      if (script) {
-        printf("complete -C '%s' %s\n", script, argv[2]);
-      } else {
-        fprintf(stderr, "complete: %s: no completion specification\n", argv[2]);
-      }
-    }
+    builtin_complete(argc, argv);
   } else if (strcmp(argv[0], "jobs") == 0) {
-    // Pass 1: mark exited jobs as Done (don't print yet)
-    for (int i = 0; i < job_count; i++) {
-      int status; // wait status
-      pid_t result = waitpid(job_table[i].pid, &status, WNOHANG);
-      if (result > 0 && WIFEXITED(status)) { job_table[i].status = "Done"; }
-    }
-
-    // Pass 2: print all jobs in original order (Running and Done interleaved)
-    int total = job_count;
-    for (int i = 0; i < total; i++) {
-      char marker = (i == total-1) ? '+' : (i == total-2) ? '-' : ' ';
-      bool done = (strcmp(job_table[i].status, "Done") == 0);
-      char *cmd = job_table[i].cmd;
-      size_t cmdlen = strlen(cmd);
-      if (done && cmdlen >= 2 && strcmp(cmd+cmdlen-2, " &") == 0) {
-        printf("[%d]%c  %-24s%.*s\n", job_table[i].job_num, marker, "Done", (int)(cmdlen-2), cmd);
-      } else {
-        printf("[%d]%c  %-24s%s\n", job_table[i].job_num, marker, job_table[i].status, cmd);
-      }
-    }
-
-    // Pass 3: compact table, free Done entries
-    int new_count = 0;
-    for (int i = 0; i < job_count; i++) {
-      if (strcmp(job_table[i].status, "Done") == 0) {
-        free(job_table[i].cmd);
-      } else {
-        job_table[new_count++] = job_table[i];
-      }
-    }
-    job_count = new_count;
+    builtin_jobs();
     return;
+  } else if (strcmp(argv[0], "history") == 0) {
+    builtin_history(argc, argv);
   }
 }
 
