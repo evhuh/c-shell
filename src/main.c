@@ -1,5 +1,6 @@
 #include "utils.h"
 #include "completion.h"
+#include "pipeline.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,15 +55,24 @@ int main(int argc, char *argv[]) {
     char *local_argv[MAX_ARGS];
     int local_argc = build_argv(input, local_argv);
 
-    // Detect background operator
-    bool background = false;
-    if (local_argc > 0 && strcmp(local_argv[local_argc - 1], "&") == 0) {
-      local_argv[--local_argc] = NULL;
-      background = true;
+    // Detect pipeline operator: scan for any "|" token
+    bool has_pipe = false;
+    for (int i = 0; i < local_argc; i++) {
+      if (strcmp(local_argv[i], "|") == 0) { has_pipe = true; break; }
     }
 
-    // 2. EXECUTE + 3. PRINT
-    execute_command(local_argc, local_argv, background);
+    if (has_pipe) { // 2. EXECUTE pipeline
+      pipeline(local_argv, local_argc);
+    } else { // Detect background operator
+      bool background = false;
+      if (local_argc > 0 && strcmp(local_argv[local_argc - 1], "&") == 0) {
+        local_argv[--local_argc] = NULL;
+        background = true;
+      }
+
+      // 2. EXECUTE + 3. PRINT
+      execute_command(local_argc, local_argv, background);
+    }
 
     free(input); // readline malloc's the line — we must free it
   }
