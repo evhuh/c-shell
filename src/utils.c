@@ -14,9 +14,60 @@ static const char *builtins[] = {
   "pwd",
   "cd",
   "complete",
+  "jobs",
 };
 static const size_t builtin_count = sizeof(builtins) / sizeof(builtins[0]);
 
+
+// AUX BACKGROUND JOBS ===================================
+Job job_table[MAX_JOBS];
+int job_count = 0;
+
+// Check all background jobs, print and remove any that have exited normally
+void reap_background_jobs(void) {
+  // Pass 1: mark exited jobs as Done
+  for (int i = 0; i < job_count; i++) {
+    int status;
+    pid_t result = waitpid(job_table[i].pid, &status, WNOHANG);
+    if (result > 0 && WIFEXITED(status)) { job_table[i].status = "Done"; }
+  }
+
+  // Pass 2: print Done jobs (cmd without trailing " &")
+  for (int i = 0; i < job_count; i++) {
+    if (strcmp(job_table[i].status, "Done") != 0) { continue; }
+    char marker = (i == job_count-1) ? '+' : (i == job_count-2) ? '-' : ' ';
+    char *cmd = job_table[i].cmd;
+    size_t cmdlen = strlen(cmd);
+    if (cmdlen >= 2 && strcmp(cmd + cmdlen - 2, " &") == 0) {
+      printf("[%d]%c  %-24s%.*s\n", job_table[i].job_num, marker, "Done", (int)(cmdlen - 2), cmd);
+    } else {
+      printf("[%d]%c  %-24s%s\n", job_table[i].job_num, marker, "Done", cmd);
+    }
+  }
+
+  // Pass 3: compact table, free Done entries
+  int new_count = 0;
+  for (int i = 0; i < job_count; i++) {
+    if (strcmp(job_table[i].status, "Done") == 0) {
+      free(job_table[i].cmd);
+    } else {
+      job_table[new_count++] = job_table[i];
+    }
+  }
+  job_count = new_count;
+}
+
+
+// Find smallest job number not currently in use
+static int next_available_job_num(void) {
+  for (int candidate = 1; ; candidate++) {
+    bool taken = false;
+    for (int i = 0; i < job_count; i++) {
+      if (job_table[i].job_num == candidate) { taken = true; break; }
+    }
+    if (!taken) { return candidate; }
+  }
+}
 
 
 // AUX PROG COMPELTION ===================================
@@ -280,11 +331,44 @@ void execute_builtin(int argc, char *argv[]) {
         fprintf(stderr, "complete: %s: no completion specification\n", argv[2]);
       }
     }
+  } else if (strcmp(argv[0], "jobs") == 0) {
+    // Pass 1: mark exited jobs as Done (don't print yet)
+    for (int i = 0; i < job_count; i++) {
+      int status; // wait status
+      pid_t result = waitpid(job_table[i].pid, &status, WNOHANG);
+      if (result > 0 && WIFEXITED(status)) { job_table[i].status = "Done"; }
+    }
+
+    // Pass 2: print all jobs in original order (Running and Done interleaved)
+    int total = job_count;
+    for (int i = 0; i < total; i++) {
+      char marker = (i == total-1) ? '+' : (i == total-2) ? '-' : ' ';
+      bool done = (strcmp(job_table[i].status, "Done") == 0);
+      char *cmd = job_table[i].cmd;
+      size_t cmdlen = strlen(cmd);
+      if (done && cmdlen >= 2 && strcmp(cmd+cmdlen-2, " &") == 0) {
+        printf("[%d]%c  %-24s%.*s\n", job_table[i].job_num, marker, "Done", (int)(cmdlen-2), cmd);
+      } else {
+        printf("[%d]%c  %-24s%s\n", job_table[i].job_num, marker, job_table[i].status, cmd);
+      }
+    }
+
+    // Pass 3: compact table, free Done entries
+    int new_count = 0;
+    for (int i = 0; i < job_count; i++) {
+      if (strcmp(job_table[i].status, "Done") == 0) {
+        free(job_table[i].cmd);
+      } else {
+        job_table[new_count++] = job_table[i];
+      }
+    }
+    job_count = new_count;
+    return;
   }
 }
 
 // Execute an External Executable
-void execute_external_command(const char *path, char *argv[]) {
+void execute_external_command(const char *path, char *argv[], bool background) {
   // RECALL: fork() called once, ret twice: 0 to child, PID of child to parent
   pid_t pid = fork(); // fork a child proc
 
@@ -298,8 +382,27 @@ void execute_external_command(const char *path, char *argv[]) {
     exit(1);
   }
 
-  // The shell process stays alive and waits for the child prog
-  waitpid(pid, NULL, 0);
+  if (background) {
+    // Build "cmd arg1 arg2 &" string for jobs display
+    size_t len = 2; // for " &"
+    for (int i = 0; argv[i]; i++) { 
+        len += strlen(argv[i]) + 1;
+    }
+    char *cmd = malloc(len+1);
+    cmd[0] = '\0';
+    for (int i = 0; argv[i]; i++) {
+      if (i > 0) strcat(cmd, " ");
+      strcat(cmd, argv[i]);
+    }
+    strcat(cmd, " &");
+
+    int job_num = next_available_job_num();
+    job_table[job_count++] = (Job){ job_num, pid, cmd, "Running" };
+    printf("[%d] %d\n", job_num, pid);
+  } else {
+    // The shell process stays alive and waits for the child prog
+    waitpid(pid, NULL, 0);
+  }
 }
 
 

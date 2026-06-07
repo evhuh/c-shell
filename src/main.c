@@ -10,7 +10,7 @@
 
 // MAIN ===================================
 // Decides whether a Command is Builtin, Executable, or missing
-void execute_command(int argc, char *argv[]) {
+void execute_command(int argc, char *argv[], bool background) {
   if (argc == 0 || argv[0] == NULL) { return; }
 
   Redirect r = apply_redirection(argv, &argc);
@@ -24,7 +24,7 @@ void execute_command(int argc, char *argv[]) {
     if (path == NULL) {
       fprintf(stderr, "%s: command not found\n", argv[0]);
     } else {
-      execute_external_command(path, argv);
+      execute_external_command(path, argv, background);
       free(path);
     }
   }
@@ -40,6 +40,9 @@ int main(int argc, char *argv[]) {
   init_completion();
 
   while (1) { // 4. LOOP
+    // Reap any completed background jobs before printing prompt
+    reap_background_jobs();
+
     // 1. READ (readline handles/intercepts TAB, arrow keys, etc.)
     char *input = readline("$ ");
     if (input == NULL) { break; } // EOF (Ctrl-D)
@@ -51,8 +54,15 @@ int main(int argc, char *argv[]) {
     char *local_argv[MAX_ARGS];
     int local_argc = build_argv(input, local_argv);
 
+    // Detect background operator
+    bool background = false;
+    if (local_argc > 0 && strcmp(local_argv[local_argc - 1], "&") == 0) {
+      local_argv[--local_argc] = NULL;
+      background = true;
+    }
+
     // 2. EXECUTE + 3. PRINT
-    execute_command(local_argc, local_argv);
+    execute_command(local_argc, local_argv, background);
 
     free(input); // readline malloc's the line — we must free it
   }
