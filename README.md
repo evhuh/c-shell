@@ -28,6 +28,43 @@ The project was built as a deep-dive into systems programming: process lifecycle
 | `complete -r <cmd>` | Remove a registered completer |
 | `complete -p <cmd>` | Inspect a registered completer |
 
+#### `boss` / `unboss`
+
+The panic button...for when you're not supposed to be gaming
+
+`boss` instantly:
+- Suspends all running game processes (they freeze mid-frame, no progress lost)
+- Focuses your existing Canvas tab in Chrome (or opens it if none is found)
+- Swaps your prompt to a studious-looking `[studying] >>`
+
+`unboss` reverses everything:
+- Resumes every process that was paused
+- Restores your default prompt
+
+**Usage**
+```bash
+boss      # panic
+unboss    # all clear
+```
+
+**Adding your own games**
+Edit the `game_patterns` array in `boss.c`:
+```c
+static const char *game_patterns[] = {
+  "RobloxPlayer",
+  "Minecraft",
+  // edit here
+  NULL,
+};
+```
+Run `pgrep -fi "YourGame"` first to confirm the pattern matches before adding it.
+
+**How it works under the hood**
+
+Uses two Unix signals: `SIGSTOP` to freeze a process and `SIGCONT` to resume it.
+They're the same signals your shell's `fg`/`bg` builtins send when managing jobs.
+Game PIDs are saved at boss-time so unboss resumes exactly what was paused.
+
 ### External Command Execution
 
 Commands not recognized as builtins are looked up by walking `$PATH` in order. The shell forks a child process and uses `execv` to replace it with the target executable. If no executable is found, an error is printed to stderr.

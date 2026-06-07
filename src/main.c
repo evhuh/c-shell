@@ -3,6 +3,7 @@
 #include "pipeline.h"
 #include "history.h"
 #include "declare.h"
+#include "boss.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,7 +69,7 @@ int main(int argc, char *argv[]) {
     reap_background_jobs();
 
     // 1. READ (readline handles/intercepts TAB, arrow keys, etc.)
-    char *input = readline("$ ");
+    char *input = readline(get_prompt());
     if (input == NULL) { break; } // EOF (Ctrl-D)
     if (input[0] == '\0') { free(input); continue; } // skip blank lines
 
