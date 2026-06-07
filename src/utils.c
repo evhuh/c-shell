@@ -2,6 +2,7 @@
 #include "completion.h"
 #include "jobs.h"
 #include "history.h"
+#include "declare.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +20,7 @@ static const char *builtins[] = {
   "complete",
   "jobs",
   "history",
+  "declare",
 };
 static const size_t builtin_count = sizeof(builtins) / sizeof(builtins[0]);
 
@@ -281,6 +283,8 @@ void execute_builtin(int argc, char *argv[]) {
     return;
   } else if (strcmp(argv[0], "history") == 0) {
     builtin_history(argc, argv);
+  } else if (strcmp(argv[0], "declare") == 0) {
+    builtin_declare(argc, argv);
   }
 }
 

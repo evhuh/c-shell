@@ -2,9 +2,11 @@
 #include "completion.h"
 #include "pipeline.h"
 #include "history.h"
+#include "declare.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
@@ -81,6 +83,55 @@ int main(int argc, char *argv[]) {
     char *local_argv[MAX_ARGS];
     int local_argc = build_argv(input, local_argv);
 
+    // [Declare: Expansion] Expand $VAR within each token
+    static char expanded[MAX_ARGS][MAX_INPUT_SIZE];
+    for (int i = 0; i < local_argc; i++) {
+      const char *src = local_argv[i];
+      if (strchr(src, '$') == NULL) { continue; } // fast path: no $ at all
+      char *dst = expanded[i];
+      int dlen = 0;
+      while (*src && dlen < MAX_INPUT_SIZE-1) {
+        // (a) Expansion with braces
+        if (*src == '$' && src[1] == '{') {
+          src += 2; // skip '${'
+          char varname[256];
+          int vlen = 0;
+          while (*src && *src != '}' && vlen < 255) { varname[vlen++] = *src++; }
+          varname[vlen] = '\0';
+          if (*src == '}') { src++; } // skip '}'
+          const char *val = get_shell_var(varname);
+          if (val) {
+            while (*val && dlen < MAX_INPUT_SIZE-1) { dst[dlen++] = *val++; }
+          }
+        // (b) Expansion
+        } else if (*src == '$' && (isalpha((unsigned char)src[1]) || src[1] == '_')) {
+          src++; // skip '$'
+          char varname[256];
+          int vlen = 0;
+          while (*src && (isalnum((unsigned char)*src) || *src == '_') && vlen < 255) {
+            varname[vlen++] = *src++;
+          }
+          varname[vlen] = '\0';
+          const char *val = get_shell_var(varname);
+          if (val) {
+            while (*val && dlen < MAX_INPUT_SIZE-1) { dst[dlen++] = *val++; }
+          }
+        } else {
+          dst[dlen++] = *src++;
+        }
+      }
+      dst[dlen] = '\0';
+      local_argv[i] = dst;
+    }
+
+    // Drop tokens that expanded to empty string
+    int new_argc = 0;
+    for (int i = 0; i < local_argc; i++) {
+      if (local_argv[i][0] != '\0') { local_argv[new_argc++] = local_argv[i]; }
+    }
+    local_argv[new_argc] = NULL;
+    local_argc = new_argc;
+
     // Detect pipeline operator: scan for any "|" token
     bool has_pipe = false;
     for (int i = 0; i < local_argc; i++) {
@@ -91,7 +142,7 @@ int main(int argc, char *argv[]) {
       pipeline(local_argv, local_argc);
     } else { // Detect background operator
       bool background = false;
-      if (local_argc > 0 && strcmp(local_argv[local_argc - 1], "&") == 0) {
+      if (local_argc > 0 && strcmp(local_argv[local_argc-1], "&") == 0) {
         local_argv[--local_argc] = NULL;
         background = true;
       }

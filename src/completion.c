@@ -90,6 +90,7 @@ static const char *builtins[] = {
   "complete",
   "jobs",
   "history",
+  "declare",
   NULL
 };
 
